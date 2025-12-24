@@ -34,15 +34,47 @@ function getSourceUrls() {
   }
 }
 
+function updateSourceFile(urlsToRemove) {
+    if (!urlsToRemove || urlsToRemove.length === 0) return;
+    
+    try {
+        console.log(`Removing ${urlsToRemove.length} broken sources from CSV...`);
+        const content = fs.readFileSync(SOURCES_FILE, 'utf-8');
+        const lines = content.split('\n');
+        const newLines = [];
+        const badUrlSet = new Set(urlsToRemove);
+
+        for (const line of lines) {
+            const trimmed = line.trim();
+            if (trimmed && badUrlSet.has(trimmed)) {
+                continue; // Skip this line
+            }
+            newLines.push(line);
+        }
+
+        fs.writeFileSync(SOURCES_FILE, newLines.join('\n'));
+        console.log('sources.csv updated.');
+    } catch (error) {
+        console.error('Error updating sources.csv:', error);
+    }
+}
+
 async function fetchPlaylist(url) {
   console.log(`Fetching playlist from: ${url}`);
   try {
     const response = await fetch(url, { signal: AbortSignal.timeout(10000) }); // 10s timeout
-    if (!response.ok) throw new Error(`Failed to fetch: ${response.status} ${response.statusText}`);
+    if (!response.ok) {
+        // Return object with error info for specific status codes we want to prune
+        if (response.status === 404 || response.status === 403 || response.status === 410) {
+             return { error: true, status: response.status, prune: true };
+        }
+        throw new Error(`Failed to fetch: ${response.status} ${response.statusText}`);
+    }
     return await response.text();
   } catch (err) {
     console.error(`Error fetching ${url}:`, err.message);
-    return null;
+    // Network errors, timeouts etc shouldn't cause permanent removal
+    return { error: true, prune: false, message: err.message };
   }
 }
 
@@ -142,12 +174,13 @@ async function main() {
     }
 
     // Determine URLs to use
-    // If a command line argument is provided, use that. Otherwise read from CSV.
     const customUrl = process.argv[2];
     let targetUrls = [];
+    let isCustomRun = false;
 
     if (customUrl) {
       targetUrls = [customUrl];
+      isCustomRun = true;
     } else {
       targetUrls = getSourceUrls();
     }
@@ -155,14 +188,30 @@ async function main() {
     console.log(`Starting fetch for ${targetUrls.length} source(s)...`);
 
     let allChannels = [];
+    const brokenUrls = [];
 
     for (const url of targetUrls) {
-        const rawM3U = await fetchPlaylist(url);
-        if (rawM3U) {
-            const channels = parseM3U(rawM3U);
+        const result = await fetchPlaylist(url);
+        
+        // Handle error objects
+        if (typeof result === 'object' && result !== null && result.error) {
+            if (result.prune && !isCustomRun) {
+                console.warn(`Marking ${url} for removal due to status ${result.status}`);
+                brokenUrls.push(url);
+            }
+            continue;
+        }
+
+        if (typeof result === 'string') {
+            const channels = parseM3U(result);
             console.log(`Parsed ${channels.length} channels from ${url}`);
             allChannels = allChannels.concat(channels);
         }
+    }
+
+    // Update sources.csv if needed
+    if (brokenUrls.length > 0) {
+        updateSourceFile(brokenUrls);
     }
 
     if (allChannels.length === 0) {
