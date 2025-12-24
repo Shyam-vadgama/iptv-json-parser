@@ -4,6 +4,11 @@ on:
   schedule:
     - cron: '0 0 * * *' # Runs daily at midnight UTC
   workflow_dispatch: # Allows manual triggering
+    inputs:
+      custom_url:
+        description: 'Optional: Custom M3U URL to parse (overrides default list)'
+        required: false
+        type: string
 
 jobs:
   build-and-deploy:
@@ -23,7 +28,14 @@ jobs:
         run: npm install
 
       - name: Run Parser
-        run: node src/parser.js
+        run: |
+          if [ "${{ github.event.inputs.custom_url }}" != "" ]; then
+            echo "Running with custom URL: ${{ github.event.inputs.custom_url }}"
+            node src/parser.js "${{ github.event.inputs.custom_url }}"
+          else
+            echo "Running with default source list"
+            node src/parser.js
+          fi
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
