@@ -3,6 +3,9 @@ name: Update IPTV Data
 on:
   schedule:
     - cron: '0 0 * * *' # Runs daily at midnight UTC
+  push:
+    paths:
+      - 'data/sources.csv' # Triggers when sources list is updated
   workflow_dispatch: # Allows manual triggering
     inputs:
       custom_url:
