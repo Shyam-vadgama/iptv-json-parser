@@ -5,6 +5,8 @@ This repository hosts a self-updating backend for an IPTV application. It automa
 ## Features
 
 - **Automated Updates:** Runs daily via GitHub Actions.
+- **Multi-Source Aggregation:** Combines channels from 90+ sources (Country, Language, and Community lists).
+- **Smart Deduplication:** Automatically removes duplicate streams to ensure a clean list.
 - **Optimized JSON:** Provides both full detailed JSON and minified versions.
 - **Free Hosting:** Served via GitHub Pages (CDN).
 - **Categorized:** Data is grouped by categories.
@@ -71,6 +73,14 @@ To run the parser locally:
 ```bash
 npm install
 node src/parser.js
+```
+
+### Fetching a Custom Playlist
+
+You can override the default source list by providing a URL as an argument:
+
+```bash
+node src/parser.js https://example.com/my-playlist.m3u
 ```
 
 Check the `data/` folder for output.
